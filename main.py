@@ -1,42 +1,42 @@
-import imageio
-import pyvista as pv
-from PIL import Image
+'''
+
+This uses a modified library, it was out of date and didn't work with python3
+https://pdsimage.readthedocs.io/en/master/PDS_Extractor.html
+
+'''
+
+import os
+import matplotlib.pyplot as plt
 import numpy as np
+import pyvista as pv
+from pdsimage_mod.PDS_Extractor import BinaryTable
 
-Image.MAX_IMAGE_PIXELS = 363894400
-
-def read_jpg2000(file_path):
-    image = imageio.v3.imread(file_path)
-    return image
-
-def convert_to_stl(image_data, output_file,start_x=0,stop_x=100,start_y=0,stop_y=0):
-    # Create a uniform grid from the image data
+# what/where to extract
+radius_to_extract_km = 200
+center_lat = -60
+center_long = 120
+ldem = BinaryTable('ldem_16')
 
 
-    shape= image_data.shape
-    x_step = (stop_x-start_x)/shape[0]
-    y_step = (stop_y - start_y) / shape[1]
-    x_range = np.linspace(start_x,stop_x,num=shape[0])
-    y_range = np.linspace(start_y, stop_y, num=shape[1])
-    xx,yy= np.meshgrid(x_range,y_range)
-    z = np.ravel(image_data)
-    x = np.ravel(xx)
-    y = np.ravel(yy)
-    xyz = np.stack((x, y, z)).T
-    grid = pv.PolyData(xyz)
-    grid.delaunay_2d(inplace=True)
-    #grid["elevation"] = image_data.flatten(order="F")  # Flatten image data and add as point array
+boundary = ldem.lambert_window(radius_to_extract_km,center_lat,center_long) #100km area extracted
+X, Y, Z = ldem.extract_grid(*boundary)
+plt.imshow(Z)
+plt.show()
 
-    # Save the grid as an STL file
-    grid.plot()
-    # grid.save(output_file)
+z = np.array(Z).T
+# Not sure about X and Y values here, might need to use actual lat/lon conversion to get absolute value
+x = np.linspace(-radius_to_extract_km*1e3,radius_to_extract_km*1e3,num=z.shape[1])
+y = np.linspace(-radius_to_extract_km*1e3,radius_to_extract_km*1e3,num=z.shape[0])
 
-# Usage
-file_path = 'example_data/SLDEM2015_512_30N_60N_180_225.JP2'
-output_file = 'output.stl'
+xx, yy = np.meshgrid(x, y)
 
-# ds = rasterio.open(file_path)
-# ds.read(1)
-#
-image_data = read_jpg2000(file_path)
-convert_to_stl(image_data, output_file)
+
+# test = pv.PolyData(xyz)
+# test.delaunay_2d(inplace=True)
+grid = pv.StructuredGrid(xx,yy,z)
+grid['elev'] = z.ravel(order='f')
+
+grid.plot(show_axes=True,show_grid=True)
+out = grid.extract_geometry()
+out.save("out.stl")
+

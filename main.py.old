@@ -1,0 +1,84 @@
+import imageio
+import pyvista as pv
+from PIL import Image
+import numpy as np
+import rasterio
+import matplotlib.pyplot as plt
+Image.MAX_IMAGE_PIXELS = 363894400
+
+
+
+def create_tiles(image: np.ndarray,kernel_size: tuple):
+    img_height, img_width = image.shape
+    new_kernel_size = [kernel_size[0],kernel_size[1]]
+    #get closet size to requestd tiles size that is equal division
+    new_kernel_size[0] = kernel_size[0]-img_height%kernel_size[0]
+    new_kernel_size[1] = kernel_size[1]-img_width%kernel_size[1]
+    tile_height,tile_width = new_kernel_size
+
+
+    tiled_array = image.reshape(img_height//tile_height,
+                                tile_height,
+                                img_width // tile_width,
+                                tile_width)
+
+    #tiled_array = tiled_array.swapaxes(1,2)
+    return tiled_array
+
+def read_jpg2000(file_path,tile_size,start_x=0,stop_x=100,start_y=0,stop_y=100):
+    image = imageio.v3.imread(file_path)
+
+    image_tiles = create_tiles(image,kernel_size= (tile_size,tile_size))
+    x_range = np.linspace(start_x,stop_x,num=image.shape[0])
+    y_range = np.linspace(start_y, stop_y, num=image.shape[1])
+    xx,yy= np.meshgrid(x_range,y_range)
+    xx_tiles = create_tiles(xx,kernel_size= (tile_size,tile_size))
+    yy_tiles = create_tiles(yy, kernel_size=(tile_size, tile_size))
+
+    grid = pv.PolyData()
+    for row_idx in range(image_tiles.shape[0]):
+        for col_idx in range(image_tiles.shape[2]):
+            x = xx_tiles[row_idx,:,col_idx,:]
+            x = np.ravel(x)*1000
+            y = yy_tiles[row_idx,:,col_idx,:]
+            y = np.ravel(y)*1000
+            z = image_tiles[row_idx,:,col_idx,:]
+            z = np.ravel(z)
+            xyz = np.stack((x, y, z)).T
+
+            grid += pv.PolyData(xyz)
+            grid.delaunay_2d(inplace=True)
+        grid.plot()
+    return image
+def ressample(arr, N):
+    A = []
+    for v in np.vsplit(arr, N):
+        A.extend([*np.hsplit(v, N)])
+    return np.array(A)
+
+    # Create a uniform grid from the image data
+
+
+
+    #grid["elevation"] = image_data.flatten(order="F")  # Flatten image data and add as point array
+
+    # Save the grid as an STL file
+
+    # grid.save(output_file)
+
+# Usage
+file_path = 'example_data/SLDEM2015_512_30N_60N_270_315.JP2'
+output_file = 'output.stl'
+
+dataset =  rasterio.open(file_path, driver='JP2OpenJPEG')
+print(dataset.profile)
+
+
+show(dataset)
+# rad.imshow(dataset.read(1), cmap='pink')
+
+# ds = rasterio.open(file_path)
+# ds.read(1)
+#
+# image_data = read_jpg2000(file_path,tile_size=10)
+
